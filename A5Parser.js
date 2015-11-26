@@ -1,4 +1,5 @@
 var Email = require ('./mailer.js');
+global.psStatusID=0;
 
 module.exports = {
 
@@ -19,26 +20,65 @@ module.exports = {
 	var pmSysStatusFlags_t = [ 
 	   "Ready", "Alert in memory", "Trouble", "Bypass on", "Last 10 seconds", "Zone event", "Status changed", "Alarm event"
 	];
+	
+	var pmZone_t = [
+   "System ", "Front Door", "Garage", "Garage Door", "Back Door", "Child Room", "Office", "Dining Room", "Dining Room",
+   "Kitchen", "Living Room1", "Living Room2", "Bed Room1", "Bed Room2", "Guest Room", "Master Bedroom", "Master Bedroom", 
+   "Laundry Room", "Master Bedroom",
+   "Basement", "Fire", "Fire", "Emergency", "Emergency", "Basement", "Office", "Attic", "Den", "Yard", 
+   "Hall", "Utility Room"]
 	   
 	console.log('in parseA5Status in='+inString);
 	var outMsg = "";
 	var byteCode = inString.split(" "); // split to byte code with space as deliminter
 	var eventType = byteCode[3];
+	var em = new Email();	
 //   d a5 0 4 0 26 13 5 0 0 0 0 43 d4 a 23
 	// parse a5 04 status
 	// Byte 3 indicates the system status (See appendix A)
 	// Byte 4 contains the system state flags (See appendix B)
 	//  Byte 5 indicates the zone triggering the event (only when bit 5 of Byte 4 is set)
 	//  Byte 6 indicates the type of zone event (only when bit 5 of Byte 4 is set). A complete list can be found in appendix D.
-
+		if ( eventType == '2' && (byteCode[4] != '0' || byteCode[5] != '0'|| byteCode[6] != '0'|| byteCode[7] != '0'))
+		{
+			outMsg = "Alarm Sounded. A5";
+			
+			for (j = 0; j < 3; ++j)
+			{
+				var code = parseInt(byteCode[j+4]);
+				for (i = 0 ; i < 7; ++i)
+				{
+					if (code  & (0x1 << i)) {
+					outMsg += pmZone_t[i+j*8+1]+ ",";
+					}
+				}
+			}
+			if (psStatusID == 4 || psStatusID == 5) // only send if it is armed
+				em.sendEmail("Alarm",outMsg);	
+			
+		}
 		if ( eventType== '4')   // 
 		{
-			var pmSysStatus = pmSysStatus_t[parseInt(byteCode[4])]; // 0
-			var sysFlags = parseInt(byteCode[5]);  // 010,0110
-			var eventZone = parseInt(byteCode[6]); // 0b0001,0011
-			var zoneTypeMsg = pmEventType_t[parseInt(byteCode[7])];  // 5
-			var X10Stat1 = parseInt(byteCode[10]); // 
-			var X10Stat2 = parseInt(byteCode[11]);
+			var psStatus = parseInt(byteCode[4],16);
+			var pmSysStatus = pmSysStatus_t[psStatus]; // 0
+			var sysFlags = parseInt(byteCode[5],16);  // 010,0110
+			var eventZone = parseInt(byteCode[6],16); // 0b0001,0011
+			var zoneTypeMsg = pmEventType_t[parseInt(byteCode[7],16)];  // 5
+			var X10Stat1 = parseInt(byteCode[10],16); // 
+			var X10Stat2 = parseInt(byteCode[11],16);
+			if (psStatus != psStatusID)
+			{
+				psStatusID = psStatus;
+console.log("psStatusID="+psStatusID);				
+				if (psStatusID == 4 || psStatusID == 5) // arm
+				{
+					em.sendEmail("Status","Alarm is armed");	
+				}
+				else if (psStatusID == 0) // disarm
+				{
+					em.sendEmail("Status","Alarm is disarmed.");	
+				}
+			}
 	// parse byte 4		
 			var pmSysStatusFlags = "";
 			for (i = 0 ; i < 7; ++i)
@@ -98,6 +138,53 @@ module.exports = {
 			outMsg ='STA:'+pmSysStatus + ', pmSysStatusFlags='+pmSysStatusFlags + ", zone="+zoneTypeMsg;
 //			var em = new Email();
 //			em.sendEmail("Alarm Status",outMsg);
+		} 
+		else if ( eventType== '6')   
+		{
+			
+//			 debug("Received zone bypass message")
+			console.log('Received zone bypass message');
+//      local zoneEnrolled = pmString2Dword(pmIncomingPdu, 5)
+			var zoneEnrolled=0;
+			var zoneBypassed=0;
+			var zoneNum=0;
+			for (i=0; i<4; ++i)
+			{
+				zoneEnrolled= parseInt(byteCode[i+4],16);
+				zoneBypassed= parseInt(byteCode[i+8],16);
+//console.log('zoneEnrolled = '+	zoneEnrolled);
+				for (j=0; j<8; ++j)
+				{
+					if (zoneEnrolled  & (0x1 << j))
+					{
+						zoneNum=j+8*i+1;
+//console.log( 'zoneEnrolled = '+	zoneEnrolled + ' zoneNum='+	zoneNum);				
+						console.log("Zone "+pmZone_t[zoneNum]+" is enrolled");
+					}
+					if (zoneBypassed  & (0x1 << j))
+					{
+						zoneNum=j+8*i+1;
+						console.log("Zone "+pmZone_t[zoneNum]+" is bypassed");
+					}
+				}
+			}
+			outMsg = 'LOG:'+inString;
+//      local zoneBypass = pmString2Dword(pmIncomingPdu, 9)
+//      for i = 1, 30 do
+//         local enrolled = (bitw.band(zoneEnrolled, 2 ^ (i - 1)) > 0)
+//         local bypass = (bitw.band(zoneBypass, 2 ^ (i - 1)) > 0)
+//         local sensor = pmSensorDev_t[i]
+//         if (sensor ~= nil) then
+//            sensor['enrolled'] = enrolled
+//            sensor['bypass'] = bypass
+//            displaySensorBypass(sensor)
+//         elseif (enrolled == true) then
+//            debug("Found zone " .. i .. " to be enrolled while not registered.")
+//            pmSensorDev_t[i] = {}
+//            pmSensorDev_t[i].enrolled = enrolled
+//            pmSensorDev_t[i].bypass = bypass
+//         end
+//      end
 		}
 		else		
 			outMsg = 'LOG:'+inString;

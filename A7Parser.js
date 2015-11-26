@@ -32,10 +32,11 @@ module.exports = {
 	];
 	
 	var pmLogUser_t = [
-   "System ", "Front Door", "Garage", "Garage Door", "Back Door", "Zone 05", "Zone 06", "Zone 07", "Zone 08",
-   "Zone 09", "Living Room", "Zone 11", "Zone 12", "Zone 13", "Zone 14", "Zone 15", "Zone 16", "Zone 17", "Zone 18",
-   "Basement", "Zone 20", "Zone 21", "Zone 22", "Zone 23", "Zone 24", "Zone 25", "Zone 26", "Zone 27", "Zone 28", 
-   "Zone 29", "Zone 30", "Fob  01", "Fob  02", "Fob  03", "Fob  04", "Fob  05", "Fob  06", "Fob  07", "Fob  08", 
+   "System ", "Front Door", "Garage", "Garage Door", "Back Door", "Child Room", "Office", "Dining Room", "Dining Room",
+   "Kitchen", "Living Room1", "Living Room2", "Bed Room1", "Bed Room2", "Guest Room", "Master Bedroom", "Master Bedroom", 
+   "Laundry Room", "Master Bedroom",
+   "Basement", "Fire", "Fire", "Emergency", "Emergency", "Basement", "Office", "Attic", "Den", "Yard", 
+   "Hall", "Utility Room", "Fob  01", "Fob  02", "Fob  03", "Fob  04", "Fob  05", "Fob  06", "Fob  07", "Fob  08", 
    "User 01", "User 02", "User 03", "User 04", "User 05", "User 06", "User 07", "User 08", "Pad  01", "Pad  02",
    "Pad  03", "Pad  04", "Pad  05", "Pad  06", "Pad  07", "Pad  08", "Sir  01", "Sir  02", "2Pad 01", "2Pad 02",
    "2Pad 03", "2Pad 04", "X10  01", "X10  02", "X10  03", "X10  04", "X10  05", "X10  06", "X10  07", "X10  08",
@@ -52,34 +53,29 @@ module.exports = {
 	
 // d a7 2 0 27 1f 13 2 10 0 0 0 43 a7 a 23	
 	var byteCode = inString.split(" "); // split to byte code with space as deliminter	   
-//   local i
 	var i;
-//   local msgCnt = string.byte(pmIncomingPdu, 3)
 //console.log("inString="+inString);
 	var msgCnt = parseInt(byteCode[2]);
 //console.log("msgCnt="+msgCnt);
-//    for i = 1, msgCnt do
 	for (i=0;i<msgCnt;++i)
 		{
-	//      local eventZone = string.byte(pmIncomingPdu, 3 + 2 * i)
 			var eventZone = parseInt(byteCode[4+i*2],16);
 //console.log("eventZone="+eventZone);			
-	//      local logEvent  = string.byte(pmIncomingPdu, 4 + 2 * i)
 			var logEvent = parseInt(byteCode[ 5+i*2],16);
 //console.log("logEvent="+logEvent);			
-	//      local eventType = bitw.band(logEvent, 0x7F)
 			var eventType = parseInt(logEvent) & 0x7f;
 //console.log("eventType="+eventType);			
-	//      local s = pmLogEvent_t[eventType + 1] + " / " + (pmLogUser_t[eventZone + 1];
 			var s = pmLogEvent_t[eventType + 1] + " / " + pmLogUser_t[eventZone ];
-	//      debug("System message: " .. s)
 			console.log("System message "+s);
-	//      local alarmStatus = pmPanelAlarmType_t[eventType] or "None"
 			var alarmStatus = pmPanelAlarmType_t[eventType];
 		}	
 	   	outMsg ='STA:'+s + ', alarmStatus='+alarmStatus;
-//			var em = new Email();
-//			em.sendEmail("Alarm Status",outMsg);
+// only output when alarm is armed and event is defined in pmPanelAlarmType_t
+		if ( (psStatusID == 4 || psStatusID == 5) && eventType < 0x44 ) 
+		{
+			var em = new Email();
+			em.sendEmail("Alarm",outMsg);
+		}
 		cb(outMsg);
 	}
 };
